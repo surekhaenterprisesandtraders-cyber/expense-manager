@@ -10,6 +10,15 @@
 <meta name="theme-color" content="#16a34a">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%2316a34a'/><text y='.9em' font-size='72' x='12'>💼</text></svg>">
 <title>ExpenseTracker</title>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    const sw = `self.addEventListener('install',e=>{self.skipWaiting();});self.addEventListener('activate',e=>{e.waitUntil(clients.claim());});self.addEventListener('fetch',e=>{if(e.request.mode==='navigate'){e.respondWith(fetch(e.request).catch(()=>new Response('<h1>Offline</h1>')));}});`;
+    const blob = new Blob([sw],{type:'application/javascript'});
+    navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{});
+  });
+}
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
@@ -551,6 +560,10 @@ function doLogin(){
   const p = document.getElementById('loginPass').value;
   const user = USERS.find(x=>x.username===u && x.password===p);
   if(!user){ document.getElementById('loginError').style.display='block'; return; }
+  localStorage.setItem('et_session', JSON.stringify({username:user.username}));
+  enterApp(user);
+}
+function enterApp(user){
   currentUser = user;
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('app').classList.add('v');
@@ -560,6 +573,7 @@ function doLogin(){
 }
 function doLogout(){
   if(!confirm('Sign out?')) return;
+  localStorage.removeItem('et_session');
   currentUser = null;
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('app').classList.remove('v');
@@ -882,6 +896,19 @@ function exportReportPDF(){
   });
   doc.save(`report_${month}.pdf`);
 }
+
+// ─── AUTO LOGIN (session restore) ───
+(function(){
+  try{
+    const s = localStorage.getItem('et_session');
+    if(s){
+      const sess = JSON.parse(s);
+      const user = USERS.find(x=>x.username===sess.username);
+      if(user){ enterApp(user); return; }
+    }
+  }catch(e){}
+  document.getElementById('loginScreen').style.display = 'flex';
+})();
 </script>
 </body>
 </html>
