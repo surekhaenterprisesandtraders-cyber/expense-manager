@@ -16,6 +16,7 @@
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 <script>
 // ─── FIREBASE CONFIG ───
 firebase.initializeApp({
@@ -28,6 +29,7 @@ firebase.initializeApp({
   appId: "1:760133494155:web:8c3e231be768abbeba7b8e"
 });
 const db = firebase.database();
+const storage = firebase.storage();
 </script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap');
@@ -384,7 +386,7 @@ const CAT_COLORS = {'Food & Dining':'rgba(22,163,74,0.10)','Transport':'rgba(37,
 let currentUser = null;
 let allExpenses = [];   // master list (from Firebase)
 let filteredExpenses = [];
-let billDataMap = {};   // id -> base64 (local only, bills stay local)
+let billDataMap = {};   // id -> download URL (from Firebase Storage)
 let pendingBillData = null, pendingBillType = null, pendingBillName = null;
 let isOnline = navigator.onLine;
 let reportData = [];
@@ -411,8 +413,7 @@ window.addEventListener('offline', ()=>{
 // ─── LOCAL STORAGE (offline buffer) ───
 function getLocalExpenses(){ try{ return JSON.parse(localStorage.getItem('et_local')||'[]'); }catch(e){ return []; } }
 function saveLocalExpenses(list){ localStorage.setItem('et_local', JSON.stringify(list)); }
-function getBills(){ try{ return JSON.parse(localStorage.getItem('et_bills')||'{}'); }catch(e){ return {}; } }
-function saveBills(m){ localStorage.setItem('et_bills', JSON.stringify(m)); }
+// Bills now stored in Firebase Storage (URLs cached in memory only)
 function getSession(){ try{ return JSON.parse(localStorage.getItem('et_session')||'null'); }catch(e){ return null; } }
 function saveSession(u){ localStorage.setItem('et_session', JSON.stringify(u)); }
 function clearSession(){ localStorage.removeItem('et_session'); }
@@ -429,7 +430,14 @@ function listenFirebase(){
     const stillPending = pending.filter(e=> pendingIds.has(e.id) && !fbData[e.id]);
     saveLocalExpenses(stillPending);
     allExpenses = [...fbList, ...stillPending].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
-    billDataMap = getBills();
+    // Load bill URLs from Firebase Storage for entries that have bills
+    const billEntries = allExpenses.filter(e=>e.billStoragePath && !billDataMap[e.id]);
+    billEntries.forEach(e=>{
+      storage.ref(e.billStoragePath).getDownloadURL().then(url=>{
+        billDataMap[e.id]=url;
+        refreshUI();
+      }).catch(()=>{});
+    });
     refreshUI();
     if(isOnline && stillPending.length) syncPendingToFirebase();
   });
@@ -481,7 +489,7 @@ function enterApp(user){
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('app').classList.add('v');
   document.getElementById('topbarUser').textContent=user.name;
-  billDataMap=getBills();
+  billDataMap={};
   listenFirebase();
   if(!isOnline) setSyncBadge('offline','Offline mode');
 }
@@ -599,12 +607,16 @@ function clearFilters(){
 // ─── DELETE ───
 function deleteExpense(id){
   if(!confirm('Delete this expense?')) return;
-  // Remove from Firebase
+  // Delete bill from Firebase Storage if exists
+  const exp=allExpenses.find(e=>e.id===id);
+  if(exp && exp.billStoragePath){
+    storage.ref(exp.billStoragePath).delete().catch(()=>{});
+  }
+  delete billDataMap[id];
+  // Remove from Firebase DB
   deleteFromFirebase(id);
   // Remove from local pending if exists
   saveLocalExpenses(getLocalExpenses().filter(e=>e.id!==id));
-  // Remove bill
-  const bills=getBills(); delete bills[id]; saveBills(bills); billDataMap=bills;
   allExpenses=allExpenses.filter(e=>e.id!==id);
   filteredExpenses=filteredExpenses.filter(e=>e.id!==id);
   renderList(); initDashboard();
@@ -612,21 +624,26 @@ function deleteExpense(id){
 }
 
 // ─── ADD EXPENSE ───
+let pendingBillFile = null; // raw File object for Firebase Storage upload
+
 function previewBill(input){
   const file=input.files[0];
   const div=document.getElementById('billPreviewAdd');
-  if(!file){ div.innerHTML=''; pendingBillData=null; return; }
+  if(!file){ div.innerHTML=''; pendingBillData=null; pendingBillFile=null; return; }
   pendingBillName=file.name;
+  pendingBillFile=file;
   const isPDF=file.type==='application/pdf';
-  const reader=new FileReader();
-  reader.onload=e=>{
-    pendingBillData=e.target.result;
-    pendingBillType=isPDF?'pdf':'image';
-    div.innerHTML=isPDF
-      ?`<div style="display:inline-flex;align-items:center;gap:8px;background:#fff0f0;padding:8px 14px;border-radius:8px;color:var(--red);font-size:13px;font-weight:600;">📄 ${file.name}</div>`
-      :`<img src="${e.target.result}" style="max-width:100%;max-height:140px;border-radius:10px;border:1px solid var(--border);">`;
-  };
-  reader.readAsDataURL(file);
+  pendingBillType=isPDF?'pdf':'image';
+  if(isPDF){
+    div.innerHTML=`<div style="display:inline-flex;align-items:center;gap:8px;background:#fff0f0;padding:8px 14px;border-radius:8px;color:var(--red);font-size:13px;font-weight:600;">📄 ${file.name}</div>`;
+  } else {
+    const reader=new FileReader();
+    reader.onload=e=>{
+      pendingBillData=e.target.result; // keep base64 for local preview only
+      div.innerHTML=`<img src="${e.target.result}" style="max-width:100%;max-height:140px;border-radius:10px;border:1px solid var(--border);">`;
+    };
+    reader.readAsDataURL(file);
+  }
 }
 
 function saveExpense(){
@@ -639,34 +656,50 @@ function saveExpense(){
   if(!date||!category||!amount||!desc){ showToast('⚠️ Fill Date, Category, Amount & Description'); return; }
 
   const id=Date.now();
-  const exp={ id, date, category, amount:parseFloat(amount), desc, payment, notes, addedBy:currentUser.name, billType:pendingBillType||null, billName:pendingBillName||null };
+  const exp={ id, date, category, amount:parseFloat(amount), desc, payment, notes, addedBy:currentUser.name, billType:pendingBillType||null, billName:pendingBillName||null, billStoragePath:null };
 
-  if(isOnline){
-    // Save directly to Firebase
-    db.ref('expenses/'+id).set(exp).then(()=>{
-      showToast('✅ Expense saved & synced!');
-    }).catch(()=>{
-      // Fallback to local if Firebase fails
+  const doSave = (storagePath, downloadURL) => {
+    if(storagePath) { exp.billStoragePath=storagePath; }
+    if(downloadURL) { billDataMap[id]=downloadURL; }
+
+    if(isOnline){
+      db.ref('expenses/'+id).set(exp).then(()=>{
+        showToast('✅ Expense saved & synced!');
+      }).catch(()=>{
+        exp._pending=true;
+        const local=getLocalExpenses(); local.push(exp); saveLocalExpenses(local);
+        showToast('⚠️ Saved locally, will sync when online');
+      });
+    } else {
       exp._pending=true;
       const local=getLocalExpenses(); local.push(exp); saveLocalExpenses(local);
-      showToast('⚠️ Saved locally, will sync when online');
+      allExpenses=[exp,...allExpenses];
+      setSyncBadge('offline','Offline — '+getLocalExpenses().length+' pending');
+      showToast('📴 Saved offline — will sync when online');
+      initDashboard();
+    }
+  };
+
+  // Upload bill to Firebase Storage if file selected
+  if(pendingBillFile && isOnline){
+    const ext = pendingBillFile.name.split('.').pop();
+    const path = `bills/${id}.${ext}`;
+    showToast('⬆️ Uploading bill…');
+    const ref = storage.ref(path);
+    ref.put(pendingBillFile).then(snap=>{
+      return snap.ref.getDownloadURL();
+    }).then(url=>{
+      doSave(path, url);
+      showToast('✅ Expense + bill saved!');
+    }).catch(()=>{
+      showToast('⚠️ Bill upload failed, expense saved without bill');
+      doSave(null, null);
     });
   } else {
-    // Offline: save locally with pending flag
-    exp._pending=true;
-    const local=getLocalExpenses(); local.push(exp); saveLocalExpenses(local);
-    allExpenses=[exp,...allExpenses];
-    setSyncBadge('offline','Offline — '+getLocalExpenses().length+' pending');
-    showToast('📴 Saved offline — will sync when online');
-    initDashboard();
+    doSave(null, null);
   }
 
-  // Save bill locally (bills always stay local)
-  if(pendingBillData){
-    const bills=getBills(); bills[id]=pendingBillData; saveBills(bills); billDataMap=bills;
-  }
-
-  pendingBillData=null; pendingBillType=null; pendingBillName=null;
+  pendingBillData=null; pendingBillType=null; pendingBillName=null; pendingBillFile=null;
   clearForm();
   showPage('dashboard');
 }
@@ -688,9 +721,15 @@ function openBillModal(id){
   document.getElementById('billModalTitle').textContent=exp.billName||'Bill / Receipt';
   const c=document.getElementById('billModalContent');
   if(exp.billType==='image'&&data){
-    c.innerHTML=`<img src="${data}"><div style="margin-top:12px;"><a href="${data}" download="${exp.billName||'bill'}" class="btn btn-green btn-block btn-sm">⬇ Download</a></div>`;
+    c.innerHTML=`<img src="${data}"><div style="margin-top:12px;"><a href="${data}" target="_blank" class="btn btn-green btn-block btn-sm">⬇ Open / Download</a></div>`;
   } else if(exp.billType==='pdf'&&data){
-    c.innerHTML=`<div style="background:#f0fdf4;padding:16px;border-radius:12px;text-align:center;font-size:15px;">📄 ${exp.billName||'bill.pdf'}</div><div style="margin-top:12px;"><a href="${data}" download="${exp.billName||'bill.pdf'}" class="btn btn-green btn-block btn-sm">⬇ Download PDF</a></div>`;
+    c.innerHTML=`<div style="background:#f0fdf4;padding:16px;border-radius:12px;text-align:center;font-size:15px;">📄 ${exp.billName||'bill.pdf'}</div><div style="margin-top:12px;"><a href="${data}" target="_blank" class="btn btn-green btn-block btn-sm">⬇ Open PDF</a></div>`;
+  } else if(exp.billStoragePath && !data){
+    // URL not yet loaded, fetch it now
+    storage.ref(exp.billStoragePath).getDownloadURL().then(url=>{
+      billDataMap[id]=url; openBillModal(id);
+    }).catch(()=>{ c.innerHTML=`<p style="color:var(--text-muted);text-align:center;padding:20px;">Bill not available</p>`; });
+    c.innerHTML=`<p style="color:var(--text-muted);text-align:center;padding:20px;">Loading bill…</p>`;
   } else { c.innerHTML=`<p style="color:var(--text-muted);text-align:center;padding:20px;">Bill not available</p>`; }
   document.getElementById('billModal').classList.add('open');
 }
