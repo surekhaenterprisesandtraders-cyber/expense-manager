@@ -260,12 +260,11 @@ input[type="date"],input[type="month"]{-webkit-appearance:none;appearance:none;}
         <div class="field"><label>Date *</label>
           <div style="position:relative;">
             <input type="text" id="expDateDisplay" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric"
-              style="width:100%;padding:13px 14px;background:var(--input-bg);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-size:16px;font-family:inherit;-webkit-appearance:none;"
-              oninput="handleDateInput(this)" onblur="validateDateInput(this)"
-              onclick="document.getElementById('expDate').showPicker ? document.getElementById('expDate').showPicker() : document.getElementById('expDate').click()">
+              style="width:100%;padding:13px 14px;padding-right:40px;background:var(--input-bg);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-size:16px;font-family:inherit;-webkit-appearance:none;"
+              oninput="handleDateInput(this)" onblur="validateDateInput(this)">
             <span style="position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:18px;pointer-events:none;">📅</span>
             <input type="date" id="expDate"
-              style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;"
+              style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;z-index:2;"
               onchange="onExpDatePicked(this.value)">
           </div>
         </div>
@@ -311,17 +310,13 @@ input[type="date"],input[type="month"]{-webkit-appearance:none;appearance:none;}
         <div class="filter-row">
           <div style="position:relative;flex:1;">
             <input type="text" id="filterFrom" placeholder="From DD/MM/YYYY" maxlength="10" inputmode="numeric"
-              style="width:100%;padding:11px 12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;-webkit-appearance:none;"
-              oninput="handleFilterDate(this,'filterFrom')" onblur="validateFilterDate(this,'filterFrom')"
-              onclick="document.getElementById('filterFromHidden').showPicker ? document.getElementById('filterFromHidden').showPicker() : document.getElementById('filterFromHidden').click()">
-            <input type="date" id="filterFromHidden" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;" onchange="onFilterDatePicked('filterFrom',this.value)">
+              style="width:100%;padding:11px 12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;-webkit-appearance:none;pointer-events:none;">
+            <input type="date" id="filterFromHidden" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;z-index:2;" onchange="onFilterDatePicked('filterFrom',this.value)">
           </div>
           <div style="position:relative;flex:1;">
             <input type="text" id="filterTo" placeholder="To DD/MM/YYYY" maxlength="10" inputmode="numeric"
-              style="width:100%;padding:11px 12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;-webkit-appearance:none;"
-              oninput="handleFilterDate(this,'filterTo')" onblur="validateFilterDate(this,'filterTo')"
-              onclick="document.getElementById('filterToHidden').showPicker ? document.getElementById('filterToHidden').showPicker() : document.getElementById('filterToHidden').click()">
-            <input type="date" id="filterToHidden" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;" onchange="onFilterDatePicked('filterTo',this.value)">
+              style="width:100%;padding:11px 12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;-webkit-appearance:none;pointer-events:none;">
+            <input type="date" id="filterToHidden" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;z-index:2;" onchange="onFilterDatePicked('filterTo',this.value)">
           </div>
         </div>
         <div class="filter-row">
