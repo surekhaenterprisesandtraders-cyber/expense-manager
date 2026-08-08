@@ -41,6 +41,16 @@ const db = firebase.database();
   --safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);
 }
 html{height:100%;height:-webkit-fill-available;}
+/* Hide native date text/placeholder permanently - only calendar icon visible, DD/MM/YYYY overlay shows the value */
+.date-native{color:transparent !important;}
+.date-native::-webkit-datetime-edit{color:transparent;}
+.date-native::-webkit-datetime-edit-fields-wrapper{color:transparent;}
+.date-native::-webkit-datetime-edit-text,
+.date-native::-webkit-datetime-edit-month-field,
+.date-native::-webkit-datetime-edit-day-field,
+.date-native::-webkit-datetime-edit-year-field{color:transparent;}
+.date-native::-webkit-calendar-picker-indicator{opacity:1;cursor:pointer;position:relative;z-index:2;}
+.date-native::-moz-placeholder{color:transparent;}
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);height:100%;height:-webkit-fill-available;overflow:hidden;-webkit-text-size-adjust:100%;position:fixed;width:100%;}
 
 /* TOAST */
@@ -259,12 +269,11 @@ input[type="date"],input[type="month"]{-webkit-appearance:none;appearance:none;}
       <div class="form-section">
         <div class="field"><label>Date *</label>
           <div style="position:relative;">
-            <input type="date" id="expDate"
-              style="width:100%;padding:13px 14px;background:var(--input-bg);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-size:16px;font-family:inherit;-webkit-appearance:none;appearance:none;cursor:pointer;"
+            <input type="date" id="expDate" class="date-native"
+              style="width:100%;padding:13px 14px;background:var(--input-bg);border:1.5px solid var(--border);border-radius:12px;font-size:16px;font-family:inherit;cursor:pointer;"
               onchange="onExpDatePicked(this.value)">
             <input type="text" id="expDateDisplay" readonly
-              style="position:absolute;inset:0;padding:13px 14px;padding-right:44px;background:transparent;border:none;border-radius:12px;color:var(--text);font-size:16px;font-family:inherit;cursor:pointer;pointer-events:none;">
-            <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--text-muted);">📅</span>
+              style="position:absolute;left:0;top:0;width:calc(100% - 40px);height:100%;padding:13px 14px;background:transparent;border:none;color:var(--text);font-size:16px;font-family:inherit;pointer-events:none;">
           </div>
         </div>
         <div class="field"><label>Category *</label>
@@ -308,18 +317,18 @@ input[type="date"],input[type="month"]{-webkit-appearance:none;appearance:none;}
       <div class="filter-wrap">
         <div class="filter-row">
           <div style="position:relative;flex:1;">
-            <input type="date" id="filterFromHidden"
-              style="width:100%;padding:11px 12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;-webkit-appearance:none;appearance:none;cursor:pointer;"
+            <input type="date" id="filterFromHidden" class="date-native"
+              style="width:100%;padding:11px 12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;cursor:pointer;"
               onchange="onFilterDatePicked('filterFrom',this.value)">
             <input type="text" id="filterFrom" placeholder="From DD/MM/YYYY" readonly
-              style="position:absolute;inset:0;padding:11px 12px;background:transparent;border:none;border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;cursor:pointer;pointer-events:none;">
+              style="position:absolute;left:0;top:0;width:calc(100% - 34px);height:100%;padding:11px 12px;background:transparent;border:none;color:var(--text);font-size:14px;font-family:inherit;pointer-events:none;">
           </div>
           <div style="position:relative;flex:1;">
-            <input type="date" id="filterToHidden"
-              style="width:100%;padding:11px 12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;-webkit-appearance:none;appearance:none;cursor:pointer;"
+            <input type="date" id="filterToHidden" class="date-native"
+              style="width:100%;padding:11px 12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;cursor:pointer;"
               onchange="onFilterDatePicked('filterTo',this.value)">
             <input type="text" id="filterTo" placeholder="To DD/MM/YYYY" readonly
-              style="position:absolute;inset:0;padding:11px 12px;background:transparent;border:none;border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;cursor:pointer;pointer-events:none;">
+              style="position:absolute;left:0;top:0;width:calc(100% - 34px);height:100%;padding:11px 12px;background:transparent;border:none;color:var(--text);font-size:14px;font-family:inherit;pointer-events:none;">
           </div>
         </div>
         <div class="filter-row">
