@@ -258,12 +258,13 @@ input[type="date"],input[type="month"]{-webkit-appearance:none;appearance:none;}
       <div class="page-sub">Record a new expense with bill</div>
       <div class="form-section">
         <div class="field"><label>Date *</label>
-          <div style="position:relative;" onclick="openPicker('expDate')">
-            <input type="text" id="expDateDisplay" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric"
-              style="width:100%;padding:13px 14px;padding-right:40px;background:var(--input-bg);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-size:16px;font-family:inherit;-webkit-appearance:none;cursor:pointer;"
-              oninput="handleDateInput(this)" onblur="validateDateInput(this)" readonly>
-            <span style="position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:18px;pointer-events:none;">📅</span>
-            <input type="date" id="expDate" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;" onchange="onExpDatePicked(this.value)">
+          <div style="position:relative;">
+            <input type="date" id="expDate"
+              style="width:100%;padding:13px 14px;background:var(--input-bg);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-size:16px;font-family:inherit;-webkit-appearance:none;appearance:none;cursor:pointer;"
+              onchange="onExpDatePicked(this.value)">
+            <input type="text" id="expDateDisplay" readonly
+              style="position:absolute;inset:0;padding:13px 14px;padding-right:44px;background:transparent;border:none;border-radius:12px;color:var(--text);font-size:16px;font-family:inherit;cursor:pointer;pointer-events:none;">
+            <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--text-muted);">📅</span>
           </div>
         </div>
         <div class="field"><label>Category *</label>
@@ -306,15 +307,19 @@ input[type="date"],input[type="month"]{-webkit-appearance:none;appearance:none;}
       </div>
       <div class="filter-wrap">
         <div class="filter-row">
-          <div style="position:relative;flex:1;" onclick="openPicker('filterFromHidden')">
-            <input type="text" id="filterFrom" placeholder="From DD/MM/YYYY"
-              style="width:100%;padding:11px 12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;-webkit-appearance:none;cursor:pointer;" readonly>
-            <input type="date" id="filterFromHidden" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;" onchange="onFilterDatePicked('filterFrom',this.value)">
+          <div style="position:relative;flex:1;">
+            <input type="date" id="filterFromHidden"
+              style="width:100%;padding:11px 12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;-webkit-appearance:none;appearance:none;cursor:pointer;"
+              onchange="onFilterDatePicked('filterFrom',this.value)">
+            <input type="text" id="filterFrom" placeholder="From DD/MM/YYYY" readonly
+              style="position:absolute;inset:0;padding:11px 12px;background:transparent;border:none;border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;cursor:pointer;pointer-events:none;">
           </div>
-          <div style="position:relative;flex:1;" onclick="openPicker('filterToHidden')">
-            <input type="text" id="filterTo" placeholder="To DD/MM/YYYY"
-              style="width:100%;padding:11px 12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;-webkit-appearance:none;cursor:pointer;" readonly>
-            <input type="date" id="filterToHidden" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;" onchange="onFilterDatePicked('filterTo',this.value)">
+          <div style="position:relative;flex:1;">
+            <input type="date" id="filterToHidden"
+              style="width:100%;padding:11px 12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;-webkit-appearance:none;appearance:none;cursor:pointer;"
+              onchange="onFilterDatePicked('filterTo',this.value)">
+            <input type="text" id="filterTo" placeholder="To DD/MM/YYYY" readonly
+              style="position:absolute;inset:0;padding:11px 12px;background:transparent;border:none;border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;cursor:pointer;pointer-events:none;">
           </div>
         </div>
         <div class="filter-row">
@@ -497,7 +502,11 @@ function enterApp(user){
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('app').classList.add('v');
   document.getElementById('topbarUser').textContent=user.name;
-  billDataMap=getBills();
+  billDataMap={};
+  // Init date field
+  document.getElementById('expDate').value=today();
+  document.getElementById('expDate').style.color='transparent';
+  document.getElementById('expDateDisplay').value=todayDDMMYYYY();
   listenFirebase();
   if(!isOnline) setSyncBadge('offline','Offline mode');
 }
@@ -533,7 +542,11 @@ function showPage(name){
   document.getElementById('scrollArea').scrollTop=0;
   if(name==='dashboard') initDashboard();
   if(name==='viewExpenses'){ filteredExpenses=[...allExpenses]; renderList(); }
-  if(name==='addExpense'){ document.getElementById('expDate').value=today(); document.getElementById('expDateDisplay').value=todayDDMMYYYY(); }
+  if(name==='addExpense'){
+    document.getElementById('expDate').value=today();
+    document.getElementById('expDate').style.color='transparent';
+    document.getElementById('expDateDisplay').value=todayDDMMYYYY();
+  }
   if(name==='reports'){ document.getElementById('reportMonth').value=today().slice(0,7); loadReport(); }
 }
 
@@ -583,11 +596,16 @@ function validateFilterDate(el,hiddenId){
 // Called when user picks from calendar on Add Expense
 function onExpDatePicked(isoVal){
   if(!isoVal) return;
-  document.getElementById('expDateDisplay').value=fmt(isoVal);
+  document.getElementById('expDateDisplay').value = fmt(isoVal);
+  // Hide native date text so only our DD/MM/YYYY overlay shows
+  document.getElementById('expDate').style.color = 'transparent';
 }
 // Called when user picks from calendar on Filter
 function onFilterDatePicked(fieldId, isoVal){
   document.getElementById(fieldId).value = isoVal ? fmt(isoVal) : '';
+  const hiddenId = fieldId==='filterFrom' ? 'filterFromHidden' : 'filterToHidden';
+  document.getElementById(hiddenId).style.color = 'transparent';
+  applyFilters();
 }
 function fmtAmt(n){ return '₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2}); }
 function fmtAmtPDF(n){ return 'Rs.'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2}); }
@@ -651,7 +669,8 @@ function applyFilters(){
 function clearFilters(){
   ['filterCat','filterPay','searchBox'].forEach(id=>document.getElementById(id).value='');
   ['filterFrom','filterTo'].forEach(id=>document.getElementById(id).value='');
-  ['filterFromHidden','filterToHidden'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('filterFromHidden').value=''; document.getElementById('filterFromHidden').style.color='';
+  document.getElementById('filterToHidden').value=''; document.getElementById('filterToHidden').style.color='';
   filteredExpenses=[...allExpenses];
   renderList();
 }
@@ -738,6 +757,7 @@ function clearForm(){
   document.getElementById('expBill').value='';
   document.getElementById('billPreviewAdd').innerHTML='';
   document.getElementById('expDate').value=today();
+  document.getElementById('expDate').style.color='transparent';
   document.getElementById('expDateDisplay').value=todayDDMMYYYY();
   pendingBillData=null; pendingBillType=null; pendingBillName=null; pendingBillFile=null;
 }
