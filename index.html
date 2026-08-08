@@ -16,7 +16,6 @@
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 <script>
 // ─── FIREBASE CONFIG ───
 firebase.initializeApp({
@@ -29,7 +28,6 @@ firebase.initializeApp({
   appId: "1:760133494155:web:8c3e231be768abbeba7b8e"
 });
 const db = firebase.database();
-const storage = firebase.storage();
 </script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap');
@@ -259,7 +257,14 @@ input[type="date"],input[type="month"]{-webkit-appearance:none;appearance:none;}
       <div class="page-title">Add Expense</div>
       <div class="page-sub">Record a new expense with bill</div>
       <div class="form-section">
-        <div class="field"><label>Date *</label><input type="date" id="expDate"></div>
+        <div class="field"><label>Date *</label>
+          <div style="position:relative;">
+            <input type="text" id="expDateDisplay" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric"
+              style="width:100%;padding:13px 14px;background:var(--input-bg);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-size:16px;font-family:inherit;-webkit-appearance:none;"
+              oninput="handleDateInput(this)" onblur="validateDateInput(this)">
+            <input type="date" id="expDate" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;">
+          </div>
+        </div>
         <div class="field"><label>Category *</label>
           <select id="expCategory">
             <option value="">Select category…</option>
@@ -300,8 +305,14 @@ input[type="date"],input[type="month"]{-webkit-appearance:none;appearance:none;}
       </div>
       <div class="filter-wrap">
         <div class="filter-row">
-          <input type="date" id="filterFrom">
-          <input type="date" id="filterTo">
+          <input type="text" id="filterFrom" placeholder="From DD/MM/YYYY" maxlength="10" inputmode="numeric"
+            style="flex:1;padding:11px 12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;-webkit-appearance:none;"
+            oninput="handleFilterDate(this,'filterFrom')" onblur="validateFilterDate(this,'filterFrom')">
+          <input type="date" id="filterFromHidden" style="display:none;">
+          <input type="text" id="filterTo" placeholder="To DD/MM/YYYY" maxlength="10" inputmode="numeric"
+            style="flex:1;padding:11px 12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;-webkit-appearance:none;"
+            oninput="handleFilterDate(this,'filterTo')" onblur="validateFilterDate(this,'filterTo')">
+          <input type="date" id="filterToHidden" style="display:none;">
         </div>
         <div class="filter-row">
           <select id="filterCat">
@@ -386,7 +397,7 @@ const CAT_COLORS = {'Food & Dining':'rgba(22,163,74,0.10)','Transport':'rgba(37,
 let currentUser = null;
 let allExpenses = [];   // master list (from Firebase)
 let filteredExpenses = [];
-let billDataMap = {};   // id -> download URL (from Firebase Storage)
+let billDataMap = {};   // id -> base64 (local only, bills stay local)
 let pendingBillData = null, pendingBillType = null, pendingBillName = null;
 let isOnline = navigator.onLine;
 let reportData = [];
@@ -413,7 +424,8 @@ window.addEventListener('offline', ()=>{
 // ─── LOCAL STORAGE (offline buffer) ───
 function getLocalExpenses(){ try{ return JSON.parse(localStorage.getItem('et_local')||'[]'); }catch(e){ return []; } }
 function saveLocalExpenses(list){ localStorage.setItem('et_local', JSON.stringify(list)); }
-// Bills now stored in Firebase Storage (URLs cached in memory only)
+function getBills(){ try{ return JSON.parse(localStorage.getItem('et_bills')||'{}'); }catch(e){ return {}; } }
+function saveBills(m){ localStorage.setItem('et_bills', JSON.stringify(m)); }
 function getSession(){ try{ return JSON.parse(localStorage.getItem('et_session')||'null'); }catch(e){ return null; } }
 function saveSession(u){ localStorage.setItem('et_session', JSON.stringify(u)); }
 function clearSession(){ localStorage.removeItem('et_session'); }
@@ -430,14 +442,7 @@ function listenFirebase(){
     const stillPending = pending.filter(e=> pendingIds.has(e.id) && !fbData[e.id]);
     saveLocalExpenses(stillPending);
     allExpenses = [...fbList, ...stillPending].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
-    // Load bill URLs from Firebase Storage for entries that have bills
-    const billEntries = allExpenses.filter(e=>e.billStoragePath && !billDataMap[e.id]);
-    billEntries.forEach(e=>{
-      storage.ref(e.billStoragePath).getDownloadURL().then(url=>{
-        billDataMap[e.id]=url;
-        refreshUI();
-      }).catch(()=>{});
-    });
+    billDataMap = getBills();
     refreshUI();
     if(isOnline && stillPending.length) syncPendingToFirebase();
   });
@@ -489,7 +494,7 @@ function enterApp(user){
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('app').classList.add('v');
   document.getElementById('topbarUser').textContent=user.name;
-  billDataMap={};
+  billDataMap=getBills();
   listenFirebase();
   if(!isOnline) setSyncBadge('offline','Offline mode');
 }
@@ -525,7 +530,7 @@ function showPage(name){
   document.getElementById('scrollArea').scrollTop=0;
   if(name==='dashboard') initDashboard();
   if(name==='viewExpenses'){ filteredExpenses=[...allExpenses]; renderList(); }
-  if(name==='addExpense') document.getElementById('expDate').value=today();
+  if(name==='addExpense'){ document.getElementById('expDate').value=today(); document.getElementById('expDateDisplay').value=todayDDMMYYYY(); }
   if(name==='reports'){ document.getElementById('reportMonth').value=today().slice(0,7); loadReport(); }
 }
 
@@ -539,8 +544,35 @@ function refreshUI(){
 }
 
 function today(){ return new Date().toISOString().slice(0,10); }
+function todayDDMMYYYY(){ const d=new Date(); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); }
 function fmt(d){ if(!d) return ''; const p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
+// Convert DD/MM/YYYY → YYYY-MM-DD for internal use
+function parseDisplayDate(s){ if(!s||s.length!==10) return ''; const p=s.split('/'); if(p.length!==3) return ''; return p[2]+'-'+p[1]+'-'+p[0]; }
+// Auto-add slashes as user types DD/MM/YYYY
+function handleDateInput(el){
+  let v=el.value.replace(/\D/g,'');
+  if(v.length>2) v=v.slice(0,2)+'/'+v.slice(2);
+  if(v.length>5) v=v.slice(0,5)+'/'+v.slice(5,9);
+  el.value=v;
+  if(v.length===10){ const iso=parseDisplayDate(v); document.getElementById('expDate').value=iso; }
+}
+function validateDateInput(el){
+  const iso=parseDisplayDate(el.value);
+  if(el.value && (!iso || isNaN(new Date(iso)))) { showToast('⚠️ Invalid date. Use DD/MM/YYYY'); el.focus(); }
+}
+function handleFilterDate(el,hiddenId){
+  let v=el.value.replace(/\D/g,'');
+  if(v.length>2) v=v.slice(0,2)+'/'+v.slice(2);
+  if(v.length>5) v=v.slice(0,5)+'/'+v.slice(5,9);
+  el.value=v;
+  if(v.length===10){ const iso=parseDisplayDate(v); document.getElementById(hiddenId+'Hidden').value=iso; }
+  else { document.getElementById(hiddenId+'Hidden').value=''; }
+}
+function validateFilterDate(el,hiddenId){
+  if(el.value && el.value.length!==10){ document.getElementById(hiddenId+'Hidden').value=''; }
+}
 function fmtAmt(n){ return '₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2}); }
+function fmtAmtPDF(n){ return 'Rs.'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2}); }
 function catIcon(cat){ return CAT_ICONS[cat]||'💸'; }
 function catBg(cat){ return CAT_COLORS[cat]||'rgba(37,99,235,0.08)'; }
 
@@ -583,8 +615,8 @@ function renderList(){ document.getElementById('expenseListBody').innerHTML=filt
 
 // ─── FILTERS ───
 function applyFilters(){
-  const from=document.getElementById('filterFrom').value;
-  const to=document.getElementById('filterTo').value;
+  const from=document.getElementById('filterFromHidden').value;
+  const to=document.getElementById('filterToHidden').value;
   const cat=document.getElementById('filterCat').value;
   const pay=document.getElementById('filterPay').value;
   const s=(document.getElementById('searchBox').value||'').toLowerCase();
@@ -599,7 +631,9 @@ function applyFilters(){
   renderList();
 }
 function clearFilters(){
-  ['filterFrom','filterTo','filterCat','filterPay','searchBox'].forEach(id=>document.getElementById(id).value='');
+  ['filterCat','filterPay','searchBox'].forEach(id=>document.getElementById(id).value='');
+  ['filterFrom','filterTo'].forEach(id=>document.getElementById(id).value='');
+  ['filterFromHidden','filterToHidden'].forEach(id=>document.getElementById(id).value='');
   filteredExpenses=[...allExpenses];
   renderList();
 }
@@ -607,16 +641,12 @@ function clearFilters(){
 // ─── DELETE ───
 function deleteExpense(id){
   if(!confirm('Delete this expense?')) return;
-  // Delete bill from Firebase Storage if exists
-  const exp=allExpenses.find(e=>e.id===id);
-  if(exp && exp.billStoragePath){
-    storage.ref(exp.billStoragePath).delete().catch(()=>{});
-  }
-  delete billDataMap[id];
-  // Remove from Firebase DB
+  // Remove from Firebase
   deleteFromFirebase(id);
   // Remove from local pending if exists
   saveLocalExpenses(getLocalExpenses().filter(e=>e.id!==id));
+  // Remove bill
+  const bills=getBills(); delete bills[id]; saveBills(bills); billDataMap=bills;
   allExpenses=allExpenses.filter(e=>e.id!==id);
   filteredExpenses=filteredExpenses.filter(e=>e.id!==id);
   renderList(); initDashboard();
@@ -624,26 +654,21 @@ function deleteExpense(id){
 }
 
 // ─── ADD EXPENSE ───
-let pendingBillFile = null; // raw File object for Firebase Storage upload
-
 function previewBill(input){
   const file=input.files[0];
   const div=document.getElementById('billPreviewAdd');
-  if(!file){ div.innerHTML=''; pendingBillData=null; pendingBillFile=null; return; }
+  if(!file){ div.innerHTML=''; pendingBillData=null; return; }
   pendingBillName=file.name;
-  pendingBillFile=file;
   const isPDF=file.type==='application/pdf';
-  pendingBillType=isPDF?'pdf':'image';
-  if(isPDF){
-    div.innerHTML=`<div style="display:inline-flex;align-items:center;gap:8px;background:#fff0f0;padding:8px 14px;border-radius:8px;color:var(--red);font-size:13px;font-weight:600;">📄 ${file.name}</div>`;
-  } else {
-    const reader=new FileReader();
-    reader.onload=e=>{
-      pendingBillData=e.target.result; // keep base64 for local preview only
-      div.innerHTML=`<img src="${e.target.result}" style="max-width:100%;max-height:140px;border-radius:10px;border:1px solid var(--border);">`;
-    };
-    reader.readAsDataURL(file);
-  }
+  const reader=new FileReader();
+  reader.onload=e=>{
+    pendingBillData=e.target.result;
+    pendingBillType=isPDF?'pdf':'image';
+    div.innerHTML=isPDF
+      ?`<div style="display:inline-flex;align-items:center;gap:8px;background:#fff0f0;padding:8px 14px;border-radius:8px;color:var(--red);font-size:13px;font-weight:600;">📄 ${file.name}</div>`
+      :`<img src="${e.target.result}" style="max-width:100%;max-height:140px;border-radius:10px;border:1px solid var(--border);">`;
+  };
+  reader.readAsDataURL(file);
 }
 
 function saveExpense(){
@@ -656,62 +681,47 @@ function saveExpense(){
   if(!date||!category||!amount||!desc){ showToast('⚠️ Fill Date, Category, Amount & Description'); return; }
 
   const id=Date.now();
-  const exp={ id, date, category, amount:parseFloat(amount), desc, payment, notes, addedBy:currentUser.name, billType:pendingBillType||null, billName:pendingBillName||null, billStoragePath:null };
+  const exp={ id, date, category, amount:parseFloat(amount), desc, payment, notes, addedBy:currentUser.name, billType:pendingBillType||null, billName:pendingBillName||null };
 
-  const doSave = (storagePath, downloadURL) => {
-    if(storagePath) { exp.billStoragePath=storagePath; }
-    if(downloadURL) { billDataMap[id]=downloadURL; }
-
-    if(isOnline){
-      db.ref('expenses/'+id).set(exp).then(()=>{
-        showToast('✅ Expense saved & synced!');
-      }).catch(()=>{
-        exp._pending=true;
-        const local=getLocalExpenses(); local.push(exp); saveLocalExpenses(local);
-        showToast('⚠️ Saved locally, will sync when online');
-      });
-    } else {
+  if(isOnline){
+    // Save directly to Firebase
+    db.ref('expenses/'+id).set(exp).then(()=>{
+      showToast('✅ Expense saved & synced!');
+    }).catch(()=>{
+      // Fallback to local if Firebase fails
       exp._pending=true;
       const local=getLocalExpenses(); local.push(exp); saveLocalExpenses(local);
-      allExpenses=[exp,...allExpenses];
-      setSyncBadge('offline','Offline — '+getLocalExpenses().length+' pending');
-      showToast('📴 Saved offline — will sync when online');
-      initDashboard();
-    }
-  };
-
-  // Upload bill to Firebase Storage if file selected
-  if(pendingBillFile && isOnline){
-    const ext = pendingBillFile.name.split('.').pop();
-    const path = `bills/${id}.${ext}`;
-    showToast('⬆️ Uploading bill…');
-    const ref = storage.ref(path);
-    ref.put(pendingBillFile).then(snap=>{
-      return snap.ref.getDownloadURL();
-    }).then(url=>{
-      doSave(path, url);
-      showToast('✅ Expense + bill saved!');
-    }).catch(()=>{
-      showToast('⚠️ Bill upload failed, expense saved without bill');
-      doSave(null, null);
+      showToast('⚠️ Saved locally, will sync when online');
     });
   } else {
-    doSave(null, null);
+    // Offline: save locally with pending flag
+    exp._pending=true;
+    const local=getLocalExpenses(); local.push(exp); saveLocalExpenses(local);
+    allExpenses=[exp,...allExpenses];
+    setSyncBadge('offline','Offline — '+getLocalExpenses().length+' pending');
+    showToast('📴 Saved offline — will sync when online');
+    initDashboard();
   }
 
-  pendingBillData=null; pendingBillType=null; pendingBillName=null; pendingBillFile=null;
+  // Save bill locally (bills always stay local)
+  if(pendingBillData){
+    const bills=getBills(); bills[id]=pendingBillData; saveBills(bills); billDataMap=bills;
+  }
+
+  pendingBillData=null; pendingBillType=null; pendingBillName=null;
   clearForm();
   showPage('dashboard');
 }
 
 function clearForm(){
-  ['expDate','expAmount','expDesc','expNotes'].forEach(id=>document.getElementById(id).value='');
+  ['expAmount','expDesc','expNotes'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('expCategory').value='';
   document.getElementById('expPayment').value='Cash';
   document.getElementById('expBill').value='';
   document.getElementById('billPreviewAdd').innerHTML='';
   document.getElementById('expDate').value=today();
-  pendingBillData=null; pendingBillType=null; pendingBillName=null;
+  document.getElementById('expDateDisplay').value=todayDDMMYYYY();
+  pendingBillData=null; pendingBillType=null; pendingBillName=null; pendingBillFile=null;
 }
 
 // ─── BILL MODAL ───
@@ -725,10 +735,7 @@ function openBillModal(id){
   } else if(exp.billType==='pdf'&&data){
     c.innerHTML=`<div style="background:#f0fdf4;padding:16px;border-radius:12px;text-align:center;font-size:15px;">📄 ${exp.billName||'bill.pdf'}</div><div style="margin-top:12px;"><a href="${data}" target="_blank" class="btn btn-green btn-block btn-sm">⬇ Open PDF</a></div>`;
   } else if(exp.billStoragePath && !data){
-    // URL not yet loaded, fetch it now
-    storage.ref(exp.billStoragePath).getDownloadURL().then(url=>{
-      billDataMap[id]=url; openBillModal(id);
-    }).catch(()=>{ c.innerHTML=`<p style="color:var(--text-muted);text-align:center;padding:20px;">Bill not available</p>`; });
+    storage.ref(exp.billStoragePath).getDownloadURL().then(url=>{ billDataMap[id]=url; openBillModal(id); }).catch(()=>{ c.innerHTML=`<p style="color:var(--text-muted);text-align:center;padding:20px;">Bill not available</p>`; });
     c.innerHTML=`<p style="color:var(--text-muted);text-align:center;padding:20px;">Loading bill…</p>`;
   } else { c.innerHTML=`<p style="color:var(--text-muted);text-align:center;padding:20px;">Bill not available</p>`; }
   document.getElementById('billModal').classList.add('open');
@@ -789,8 +796,8 @@ function exportPDF(){
   doc.setFontSize(9); doc.setTextColor(100);
   doc.text(`Generated: ${new Date().toLocaleDateString('en-IN')} | User: ${currentUser.name}`,14,26);
   const total=list.reduce((s,e)=>s+Number(e.amount),0);
-  doc.text(`Total: ${fmtAmt(total)}`,14,33);
-  doc.autoTable({startY:38,head:[['Date','Description','Category','Amount','Payment','By']],body:list.map(e=>[fmt(e.date),e.desc,e.category,fmtAmt(e.amount),e.payment,e.addedBy]),theme:'grid',headStyles:{fillColor:[22,163,74],textColor:255,fontStyle:'bold',fontSize:8},alternateRowStyles:{fillColor:[245,252,248]},styles:{fontSize:7}});
+  doc.text(`Total: ${fmtAmtPDF(total)}`,14,33);
+  doc.autoTable({startY:38,head:[['Date','Description','Category','Amount','Payment','By']],body:list.map(e=>[fmt(e.date),e.desc,e.category,fmtAmtPDF(e.amount),e.payment,e.addedBy]),theme:'grid',headStyles:{fillColor:[22,163,74],textColor:255,fontStyle:'bold',fontSize:8},alternateRowStyles:{fillColor:[245,252,248]},styles:{fontSize:7}});
   doc.save(`expenses_${today()}.pdf`);
 }
 function exportReportXLS(){
@@ -809,8 +816,8 @@ function exportReportPDF(){
   doc.setFontSize(9); doc.setTextColor(100);
   doc.text(`User: ${currentUser.name} | Generated: ${new Date().toLocaleDateString('en-IN')}`,14,26);
   const total=reportData.reduce((s,e)=>s+Number(e.amount),0);
-  doc.text(`Total: ${fmtAmt(total)}`,14,33);
-  doc.autoTable({startY:38,head:[['Date','Description','Category','Amount','Payment','By']],body:[...reportData].sort((a,b)=>b.date.localeCompare(a.date)).map(e=>[fmt(e.date),e.desc,e.category,fmtAmt(e.amount),e.payment,e.addedBy]),theme:'grid',headStyles:{fillColor:[22,163,74],textColor:255,fontStyle:'bold',fontSize:8},alternateRowStyles:{fillColor:[245,252,248]},styles:{fontSize:7}});
+  doc.text(`Total: ${fmtAmtPDF(total)}`,14,33);
+  doc.autoTable({startY:38,head:[['Date','Description','Category','Amount','Payment','By']],body:[...reportData].sort((a,b)=>b.date.localeCompare(a.date)).map(e=>[fmt(e.date),e.desc,e.category,fmtAmtPDF(e.amount),e.payment,e.addedBy]),theme:'grid',headStyles:{fillColor:[22,163,74],textColor:255,fontStyle:'bold',fontSize:8},alternateRowStyles:{fillColor:[245,252,248]},styles:{fontSize:7}});
   doc.save(`report_${month}.pdf`);
 }
 </script>
