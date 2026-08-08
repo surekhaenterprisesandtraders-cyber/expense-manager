@@ -258,14 +258,12 @@ input[type="date"],input[type="month"]{-webkit-appearance:none;appearance:none;}
       <div class="page-sub">Record a new expense with bill</div>
       <div class="form-section">
         <div class="field"><label>Date *</label>
-          <div style="position:relative;">
+          <div style="position:relative;" onclick="openPicker('expDate')">
             <input type="text" id="expDateDisplay" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric"
-              style="width:100%;padding:13px 14px;padding-right:40px;background:var(--input-bg);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-size:16px;font-family:inherit;-webkit-appearance:none;"
-              oninput="handleDateInput(this)" onblur="validateDateInput(this)">
+              style="width:100%;padding:13px 14px;padding-right:40px;background:var(--input-bg);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-size:16px;font-family:inherit;-webkit-appearance:none;cursor:pointer;"
+              oninput="handleDateInput(this)" onblur="validateDateInput(this)" readonly>
             <span style="position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:18px;pointer-events:none;">📅</span>
-            <input type="date" id="expDate"
-              style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;z-index:2;"
-              onchange="onExpDatePicked(this.value)">
+            <input type="date" id="expDate" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;" onchange="onExpDatePicked(this.value)">
           </div>
         </div>
         <div class="field"><label>Category *</label>
@@ -308,15 +306,15 @@ input[type="date"],input[type="month"]{-webkit-appearance:none;appearance:none;}
       </div>
       <div class="filter-wrap">
         <div class="filter-row">
-          <div style="position:relative;flex:1;">
-            <input type="text" id="filterFrom" placeholder="From DD/MM/YYYY" maxlength="10" inputmode="numeric"
-              style="width:100%;padding:11px 12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;-webkit-appearance:none;pointer-events:none;">
-            <input type="date" id="filterFromHidden" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;z-index:2;" onchange="onFilterDatePicked('filterFrom',this.value)">
+          <div style="position:relative;flex:1;" onclick="openPicker('filterFromHidden')">
+            <input type="text" id="filterFrom" placeholder="From DD/MM/YYYY"
+              style="width:100%;padding:11px 12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;-webkit-appearance:none;cursor:pointer;" readonly>
+            <input type="date" id="filterFromHidden" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;" onchange="onFilterDatePicked('filterFrom',this.value)">
           </div>
-          <div style="position:relative;flex:1;">
-            <input type="text" id="filterTo" placeholder="To DD/MM/YYYY" maxlength="10" inputmode="numeric"
-              style="width:100%;padding:11px 12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;-webkit-appearance:none;pointer-events:none;">
-            <input type="date" id="filterToHidden" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;z-index:2;" onchange="onFilterDatePicked('filterTo',this.value)">
+          <div style="position:relative;flex:1;" onclick="openPicker('filterToHidden')">
+            <input type="text" id="filterTo" placeholder="To DD/MM/YYYY"
+              style="width:100%;padding:11px 12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;-webkit-appearance:none;cursor:pointer;" readonly>
+            <input type="date" id="filterToHidden" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;" onchange="onFilterDatePicked('filterTo',this.value)">
           </div>
         </div>
         <div class="filter-row">
@@ -572,6 +570,12 @@ function handleFilterDate(el,hiddenId){
   el.value=v;
   if(v.length===10){ const iso=parseDisplayDate(v); document.getElementById(hiddenId+'Hidden').value=iso; }
   else { document.getElementById(hiddenId+'Hidden').value=''; }
+}
+// Cross-browser date picker opener (works in Firefox + Safari)
+function openPicker(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  try { el.showPicker(); } catch(e) { el.focus(); el.click(); }
 }
 function validateFilterDate(el,hiddenId){
   if(el.value && el.value.length!==10){ document.getElementById(hiddenId+'Hidden').value=''; }
